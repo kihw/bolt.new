@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   bolt-app:
@@ -13,7 +12,7 @@ services:
       # Ajoutez vos variables d'environnement ici
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     env_file:
-      - .env.local
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/"]
