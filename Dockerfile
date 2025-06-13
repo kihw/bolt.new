@@ -1,6 +1,14 @@
 # Multi-stage build pour optimiser la taille de l'image finale
 FROM node:20.15.1-alpine AS base
 
+# Installation des dépendances système nécessaires pour les binaires natifs
+RUN apk add --no-cache \
+    libc6-compat \
+    python3 \
+    make \
+    g++ \
+    && ln -sf python3 /usr/bin/python
+
 # Installation de pnpm
 RUN npm install -g pnpm@9.4.0
 
@@ -14,23 +22,34 @@ COPY package.json pnpm-lock.yaml ./
 FROM base AS deps
 RUN pnpm install --frozen-lockfile
 
-# Stage pour le build
-FROM base AS builder
+# Stage pour le build - utiliser une image standard au lieu d'Alpine
+FROM node:20.15.1 AS builder
+
+# Installer pnpm
+RUN npm install -g pnpm@9.4.0
+
+WORKDIR /app
+
+# Copier les dépendances depuis le stage deps
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build de l'application
+# Build de l'application avec les variables d'environnement nécessaires
+ENV NODE_ENV=production
 RUN pnpm run build
 
-# Stage de production
+# Stage de production - revenir à Alpine pour une image plus légère
 FROM node:20.15.1-alpine AS runner
+
+# Installation des dépendances système pour l'exécution
+RUN apk add --no-cache \
+    libc6-compat \
+    curl \
+    && addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
 
 # Installer pnpm dans l'image finale
 RUN npm install -g pnpm@9.4.0
-
-# Créer un utilisateur non-root pour la sécurité
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
 
 WORKDIR /app
 

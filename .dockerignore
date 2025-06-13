@@ -113,3 +113,8 @@ LICENSE
 __tests__/
 test/
 tests/
+
+# Fichiers spécifiques au projet
+public/social_preview_index.jpg
+public/project-visibility.jpg
+icons/
