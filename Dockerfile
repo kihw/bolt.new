@@ -49,8 +49,9 @@ RUN apt-get update && apt-get install -y \
     && groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nextjs
 
-# Installer pnpm et un serveur HTTP simple
+# Installer pnpm, wrangler et serve comme fallback
 RUN npm install -g pnpm@9.4.0 serve
+RUN npm install -g wrangler || echo "Wrangler installation failed, will use fallback"
 
 WORKDIR /app
 
@@ -58,16 +59,31 @@ WORKDIR /app
 COPY --from=builder --chown=nextjs:nodejs /app/build ./build
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 
 # Copier le fichier .env s'il existe, sinon créer un fichier vide
 COPY --from=builder /app/.env* ./
 RUN [ ! -f .env ] && touch .env || true
 
-# Installer seulement les dépendances de production (sans wrangler pour éviter workerd)
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+# Créer le script de démarrage
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Démarrage de l'\''application bolt.new..."\n\
+if wrangler --version > /dev/null 2>&1; then\n\
+    echo "Wrangler disponible, démarrage avec wrangler..."\n\
+    bindings=$(./bindings.sh)\n\
+    exec wrangler pages dev ./build/client $bindings --port 8787 --host 0.0.0.0\n\
+else\n\
+    echo "Wrangler non disponible, démarrage avec serveur statique..."\n\
+    exec serve -s ./build/client -l 8787\n\
+fi' > start.sh
+
+# Installer seulement les dépendances de production
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts || pnpm install --prod --frozen-lockfile
 
 # Créer les répertoires nécessaires et configurer les permissions
 RUN mkdir -p /home/nextjs/.config && \
+    chmod +x ./bindings.sh ./start.sh && \
     chown -R nextjs:nodejs /app /home/nextjs
 
 # Changer vers l'utilisateur non-root
@@ -84,5 +100,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec serveur simple
-CMD ["serve", "-s", "./build/client", "-l", "8787"]
+# Commande de démarrage avec script conditionnel
+CMD ["./start.sh"]
