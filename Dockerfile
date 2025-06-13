@@ -86,5 +86,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec le serveur SSR natif de bolt.new
-CMD ["node", "./build/index.js"]
+# Commande de démarrage - essayer différents emplacements du serveur
+CMD ["sh", "-c", "if [ -f ./build/server/index.js ]; then node ./build/server/index.js; elif [ -f ./build/index.js ]; then node ./build/index.js; elif [ -f ./build/client/index.js ]; then node ./build/client/index.js; else echo 'Aucun serveur trouvé, structure:' && find ./build -name '*.js' -type f | head -10 && exit 1; fi"]
