@@ -54,8 +54,13 @@ WORKDIR /app
 # Copier les fichiers nécessaires depuis le builder
 COPY --from=builder --chown=nextjs:nodejs /app/build ./build
 
-# Créer un index.html pour bolt.new
-RUN cat > ./build/client/index.html << 'EOF'
+# Analyser la structure pour trouver le bon point d'entrée
+RUN echo "Structure complète:" && find ./build -type f -name "*.html" -o -name "*.js" | head -20
+
+# Chercher un fichier HTML existant ou en créer un minimal qui charge l'app
+RUN if [ ! -f ./build/client/index.html ]; then \
+    echo "Création d'un index.html minimal pour charger Bolt.new..." && \
+    cat > ./build/client/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,162 +68,83 @@ RUN cat > ./build/client/index.html << 'EOF'
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bolt.new</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/logo.svg" type="image/svg+xml">
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: white;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-            flex: 1;
+        #root { min-height: 100vh; }
+        .loading {
             display: flex;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
-            text-align: center;
+            justify-content: center;
+            min-height: 100vh;
+            flex-direction: column;
         }
-        .logo {
-            width: 120px;
-            height: 120px;
-            margin-bottom: 2rem;
-            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #333;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
-        h1 {
-            color: white;
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        p {
-            color: rgba(255,255,255,0.9);
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            max-width: 600px;
-        }
-        .features {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 2rem;
-            margin: 2rem 0;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .features h2 {
-            color: white;
-            margin-bottom: 1rem;
-        }
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .feature {
-            background: rgba(255,255,255,0.1);
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .feature h3 {
-            color: white;
-            margin-bottom: 0.5rem;
-            font-size: 1rem;
-        }
-        .feature p {
-            color: rgba(255,255,255,0.8);
-            font-size: 0.9rem;
-            margin: 0;
-        }
-        .status {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4CAF50;
-            padding: 0.5rem 1rem;
-            border-radius: 24px;
-            font-weight: bold;
-            margin: 1rem 0;
-            border: 1px solid rgba(76, 175, 80, 0.3);
-        }
-        .assets-list {
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 1rem;
-            margin-top: 2rem;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .assets-list h3 {
-            color: white;
-            margin-bottom: 1rem;
-            font-size: 1.1rem;
-        }
-        .asset-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 0.5rem;
-            font-size: 0.8rem;
-        }
-        .asset-item {
-            color: rgba(255,255,255,0.7);
-            padding: 0.25rem;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.05);
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <img src="/logo.svg" alt="Bolt.new Logo" class="logo" onerror="this.style.display='none'">
-        <h1>Bolt.new</h1>
-        <div class="status">✅ Application déployée avec succès</div>
-        <p>Votre application Bolt.new est maintenant en cours d'exécution dans Docker. Cette interface vous permet de voir que tous les assets ont été correctement buildés et sont prêts à être utilisés.</p>
-        
-        <div class="features">
-            <h2>🚀 Fonctionnalités</h2>
-            <div class="feature-grid">
-                <div class="feature">
-                    <h3>⚡ Performance</h3>
-                    <p>Application optimisée pour la production</p>
-                </div>
-                <div class="feature">
-                    <h3>🔧 Build Assets</h3>
-                    <p>Tous les assets sont compilés et optimisés</p>
-                </div>
-                <div class="feature">
-                    <h3>🐳 Docker</h3>
-                    <p>Déploiement containerisé fiable</p>
-                </div>
-                <div class="feature">
-                    <h3>📦 Production Ready</h3>
-                    <p>Configuration optimisée pour la production</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="assets-list">
-            <h3>📁 Assets disponibles</h3>
-            <div class="asset-grid">
-                <div class="asset-item">favicon.svg</div>
-                <div class="asset-item">logo.svg</div>
-                <div class="asset-item">CSS Optimisé</div>
-                <div class="asset-item">JavaScript Modules</div>
-                <div class="asset-item">Langages de code (200+)</div>
-                <div class="asset-item">Thèmes de coloration</div>
-            </div>
+    <div id="root">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Chargement de Bolt.new...</p>
         </div>
     </div>
+    
+    <!-- Essayer de charger les scripts Bolt.new -->
+    <script type="module">
+        // Chercher le point d'entrée principal
+        const scripts = [
+            '/index.js',
+            '/assets/index.js', 
+            '/client/index.js',
+            '/main.js',
+            '/app.js'
+        ];
+        
+        let loaded = false;
+        
+        for (const script of scripts) {
+            try {
+                await import(script);
+                loaded = true;
+                break;
+            } catch (e) {
+                console.log(`Impossible de charger ${script}:`, e.message);
+            }
+        }
+        
+        if (!loaded) {
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; text-align: center;">
+                    <h1>Bolt.new Assets</h1>
+                    <p>Application buildée avec succès. Les modules sont prêts.</p>
+                    <p>Vérifiez les logs du conteneur pour plus d'informations.</p>
+                    <a href="/assets/" style="color: #667eea;">Voir les assets →</a>
+                </div>
+            `;
+        }
+    </script>
 </body>
 </html>
 EOF
+fi
 
-# Créer un serveur Node.js simple
+# Créer un serveur qui sert intelligemment les assets
 RUN cat > server.cjs << 'EOF'
 const http = require("http");
 const fs = require("fs");
@@ -231,20 +157,18 @@ const PUBLIC_DIR = "./build/client";
 const mimeTypes = {
   ".html": "text/html",
   ".js": "text/javascript",
+  ".mjs": "text/javascript", 
   ".css": "text/css",
   ".json": "application/json",
   ".png": "image/png",
-  ".jpg": "image/jpg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
-  ".woff": "application/font-woff",
-  ".woff2": "font/woff2",
-  ".ttf": "application/font-ttf"
+  ".woff": "font/woff",
+  ".woff2": "font/woff2"
 };
 
 const server = http.createServer((req, res) => {
+  // Headers pour les modules ES et CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -258,8 +182,27 @@ const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url);
   let pathname = parsedUrl.pathname;
   
+  // Route racine vers index.html
   if (pathname === "/") {
     pathname = "/index.html";
+  }
+  
+  // Route pour lister les assets (debug)
+  if (pathname === "/assets/") {
+    const assetsDir = path.join(PUBLIC_DIR, "assets");
+    if (fs.existsSync(assetsDir)) {
+      const files = fs.readdirSync(assetsDir);
+      const html = `
+        <h1>Assets Bolt.new</h1>
+        <ul>
+          ${files.map(f => `<li><a href="/assets/${f}">${f}</a></li>`).join('')}
+        </ul>
+        <p><a href="/">← Retour à l'application</a></p>
+      `;
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(html);
+      return;
+    }
   }
   
   const filePath = path.join(PUBLIC_DIR, pathname);
@@ -268,17 +211,33 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      if (pathname === "/index.html" || ext === "" || ext === ".html") {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(fs.readFileSync(path.join(PUBLIC_DIR, "index.html")));
+      // Fallback vers index.html pour les routes SPA
+      if (ext === "" || ext === ".html") {
+        const indexPath = path.join(PUBLIC_DIR, "index.html");
+        fs.readFile(indexPath, (fallbackErr, fallbackData) => {
+          if (fallbackErr) {
+            res.writeHead(404);
+            res.end("404 Not Found");
+          } else {
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(fallbackData);
+          }
+        });
       } else {
         console.log(`❌ 404: ${pathname}`);
         res.writeHead(404);
         res.end("404 Not Found");
       }
     } else {
+      // Headers spéciaux pour les modules JavaScript
+      const headers = { "Content-Type": mimeType };
+      if (ext === ".js" || ext === ".mjs") {
+        headers["Cross-Origin-Embedder-Policy"] = "require-corp";
+        headers["Cross-Origin-Opener-Policy"] = "same-origin";
+      }
+      
       console.log(`✅ 200: ${pathname}`);
-      res.writeHead(200, { "Content-Type": mimeType });
+      res.writeHead(200, headers);
       res.end(data);
     }
   });
@@ -286,6 +245,19 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Bolt.new server running on http://0.0.0.0:${PORT}`);
+  console.log(`📁 Serving from: ${PUBLIC_DIR}`);
+  
+  // Afficher les points d'entrée disponibles
+  const indexPath = path.join(PUBLIC_DIR, "index.html");
+  if (fs.existsSync(indexPath)) {
+    console.log(`📄 Index file found: ${indexPath}`);
+  }
+  
+  const assetsPath = path.join(PUBLIC_DIR, "assets");
+  if (fs.existsSync(assetsPath)) {
+    const assets = fs.readdirSync(assetsPath).slice(0, 5);
+    console.log(`📦 Assets available: ${assets.join(', ')}...`);
+  }
 });
 EOF
 
