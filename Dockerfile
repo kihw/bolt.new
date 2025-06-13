@@ -64,92 +64,125 @@ COPY --from=builder /app/.env* ./
 RUN [ ! -f .env ] && touch .env || true
 
 # Installer seulement les dépendances de production nécessaires pour le runtime
-# Exclure wrangler et workerd qui causent des problèmes
 RUN pnpm install --prod --frozen-lockfile || \
-    (echo "Installation avec pnpm échouée, utilisation de npm..." && \
-     npm ci --only=production --ignore-scripts)
+    npm ci --only=production --ignore-scripts
 
-# Créer un serveur simple pour l'application
-RUN echo '#!/bin/bash\n\
-set -e\n\
-echo "Démarrage du serveur de production..."\n\
-\n\
-# Serveur Node.js avec modules ES pour servir les fichiers statiques\n\
-cat > server.js << '"'"'EOF'"'"'\n\
-import http from "http";\n\
-import fs from "fs";\n\
-import path from "path";\n\
-import url from "url";\n\
-\n\
-const PORT = process.env.PORT || 8787;\n\
-const PUBLIC_DIR = "./build/client";\n\
-\n\
-const mimeTypes = {\n\
-  ".html": "text/html",\n\
-  ".js": "text/javascript",\n\
-  ".css": "text/css",\n\
-  ".json": "application/json",\n\
-  ".png": "image/png",\n\
-  ".jpg": "image/jpg",\n\
-  ".gif": "image/gif",\n\
-  ".svg": "image/svg+xml",\n\
-  ".wav": "audio/wav",\n\
-  ".mp4": "video/mp4",\n\
-  ".woff": "application/font-woff",\n\
-  ".ttf": "application/font-ttf",\n\
-  ".eot": "application/vnd.ms-fontobject",\n\
-  ".otf": "application/font-otf",\n\
-  ".wasm": "application/wasm"\n\
-};\n\
-\n\
-const server = http.createServer((req, res) => {\n\
-  const parsedUrl = url.parse(req.url);\n\
-  let pathname = `.${parsedUrl.pathname}`;\n\
-  \n\
-  // Servir depuis le répertoire public\n\
-  if (pathname === "./") {\n\
-    pathname = `${PUBLIC_DIR}/index.html`;\n\
-  } else {\n\
-    pathname = `${PUBLIC_DIR}${parsedUrl.pathname}`;\n\
-  }\n\
-\n\
-  const ext = path.parse(pathname).ext;\n\
-  const mimeType = mimeTypes[ext] || "application/octet-stream";\n\
-\n\
-  fs.readFile(pathname, (err, data) => {\n\
-    if (err) {\n\
-      // Fallback vers index.html pour les routes SPA\n\
-      if (ext === "" || ext === ".html") {\n\
-        fs.readFile(`${PUBLIC_DIR}/index.html`, (fallbackErr, fallbackData) => {\n\
-          if (fallbackErr) {\n\
-            res.writeHead(404);\n\
-            res.end("404 Not Found");\n\
-          } else {\n\
-            res.writeHead(200, { "Content-Type": "text/html" });\n\
-            res.end(fallbackData);\n\
-          }\n\
-        });\n\
-      } else {\n\
-        res.writeHead(404);\n\
-        res.end("404 Not Found");\n\
-      }\n\
-    } else {\n\
-      res.writeHead(200, { "Content-Type": mimeType });\n\
-      res.end(data);\n\
-    }\n\
-  });\n\
-});\n\
-\n\
-server.listen(PORT, "0.0.0.0", () => {\n\
-  console.log(`Serveur démarré sur http://0.0.0.0:${PORT}`);\n\
-});\n\
-EOF\n\
-\n\
-exec node server.js' > start.sh
+# Créer un serveur CommonJS simple
+RUN cat > server.cjs << 'EOF'
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const url = require("url");
+
+const PORT = process.env.PORT || 8787;
+const PUBLIC_DIR = "./build/client";
+
+const mimeTypes = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".woff": "application/font-woff",
+  ".woff2": "font/woff2",
+  ".ttf": "application/font-ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".otf": "application/font-otf",
+  ".wasm": "application/wasm"
+};
+
+const server = http.createServer((req, res) => {
+  // Ajouter les headers CORS et de sécurité
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  const parsedUrl = url.parse(req.url);
+  let pathname = parsedUrl.pathname;
+  
+  // Gestion spéciale pour favicon.ico
+  if (pathname === "/favicon.ico") {
+    const faviconPath = path.join(PUBLIC_DIR, "favicon.ico");
+    fs.readFile(faviconPath, (err, data) => {
+      if (err) {
+        // Créer un favicon minimal si absent
+        res.writeHead(200, { "Content-Type": "image/x-icon" });
+        res.end();
+      } else {
+        res.writeHead(200, { "Content-Type": "image/x-icon" });
+        res.end(data);
+      }
+    });
+    return;
+  }
+  
+  // Servir depuis le répertoire public
+  if (pathname === "/") {
+    pathname = "/index.html";
+  }
+  
+  const filePath = path.join(PUBLIC_DIR, pathname);
+  const ext = path.parse(filePath).ext;
+  const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      // Fallback vers index.html pour les routes SPA
+      if (ext === "" || ext === ".html" || !ext) {
+        fs.readFile(path.join(PUBLIC_DIR, "index.html"), (fallbackErr, fallbackData) => {
+          if (fallbackErr) {
+            console.log(`❌ 404: ${pathname}`);
+            res.writeHead(404);
+            res.end("404 Not Found");
+          } else {
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(fallbackData);
+          }
+        });
+      } else {
+        console.log(`❌ 404: ${pathname}`);
+        res.writeHead(404);
+        res.end("404 Not Found");
+      }
+    } else {
+      console.log(`✅ 200: ${pathname}`);
+      res.writeHead(200, { "Content-Type": mimeType });
+      res.end(data);
+    }
+  });
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Serveur bolt.new démarré sur http://0.0.0.0:${PORT}`);
+  console.log(`📁 Servant les fichiers depuis: ${PUBLIC_DIR}`);
+  console.log(`🔍 Vérifiez que le dossier contient bien index.html`);
+  
+  // Lister les fichiers disponibles pour debug
+  fs.readdir(PUBLIC_DIR, (err, files) => {
+    if (err) {
+      console.log(`⚠️  Impossible de lire le dossier ${PUBLIC_DIR}`);
+    } else {
+      console.log(`📋 Fichiers disponibles: ${files.slice(0, 10).join(', ')}${files.length > 10 ? '...' : ''}`);
+    }
+  });
+});
+EOF
 
 # Créer les répertoires nécessaires et configurer les permissions
 RUN mkdir -p /home/nextjs/.config && \
-    chmod +x ./start.sh && \
     chown -R nextjs:nodejs /app /home/nextjs
 
 # Changer vers l'utilisateur non-root
@@ -166,5 +199,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec serveur Node.js simple
-CMD ["./start.sh"]
+# Commande de démarrage avec serveur CommonJS
+CMD ["node", "server.cjs"]
