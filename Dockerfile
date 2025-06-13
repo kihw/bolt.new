@@ -34,7 +34,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build de l'application avec les variables d\'environnement nécessaires
+# Build de l'application avec les variables d'environnement nécessaires
 ENV NODE_ENV=production
 RUN pnpm run build
 
@@ -45,17 +45,12 @@ FROM node:20.15.1-alpine AS runner
 RUN apk add --no-cache \
     libc6-compat \
     curl \
+    bash \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-# Installer pnpm et configurer le répertoire global
-RUN npm install -g pnpm@9.4.0 \
-    && mkdir -p /home/nextjs/.local/share/pnpm \
-    && chown -R nextjs:nodejs /home/nextjs/.local
-
-# Définir les variables d'environnement pour pnpm
-ENV PNPM_HOME="/home/nextjs/.local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
+# Installer pnpm
+RUN npm install -g pnpm@9.4.0
 
 WORKDIR /app
 
@@ -70,12 +65,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 # Installer seulement les dépendances de production
 RUN pnpm install --prod --frozen-lockfile
 
-# Changer vers l'utilisateur non-root avant d\'installer wrangler
+# Changer vers l'utilisateur non-root et définir le shell
 USER nextjs
+ENV SHELL=/bin/bash
 
-# Configurer pnpm pour l'utilisateur et installer wrangler
-RUN pnpm setup \
-    && pnpm install -g wrangler
+# Installer wrangler globalement sans pnpm setup
+RUN pnpm install -g wrangler
 
 # Rendre le script bindings.sh exécutable
 USER root
