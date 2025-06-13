@@ -74,12 +74,12 @@ RUN echo '#!/bin/bash\n\
 set -e\n\
 echo "Démarrage du serveur de production..."\n\
 \n\
-# Serveur Node.js simple pour servir les fichiers statiques et gérer les fonctions\n\
+# Serveur Node.js avec modules ES pour servir les fichiers statiques\n\
 cat > server.js << '"'"'EOF'"'"'\n\
-const http = require("http");\n\
-const fs = require("fs");\n\
-const path = require("path");\n\
-const url = require("url");\n\
+import http from "http";\n\
+import fs from "fs";\n\
+import path from "path";\n\
+import url from "url";\n\
 \n\
 const PORT = process.env.PORT || 8787;\n\
 const PUBLIC_DIR = "./build/client";\n\
