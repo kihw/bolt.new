@@ -38,27 +38,19 @@ COPY . .
 ENV NODE_ENV=production
 RUN pnpm run build
 
-# Stage de production - utiliser Debian slim au lieu d'Alpine pour workerd
+# Stage de production
 FROM node:20.15.1-slim AS runner
 
 # Installation des dépendances système pour l'exécution
 RUN apt-get update && apt-get install -y \
     curl \
-    libc++1 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nextjs
 
-# Installer pnpm et configurer les variables d'environnement
-RUN npm install -g pnpm@9.4.0
-
-# Configurer PNPM_HOME et PATH pour l'installation globale
-ENV PNPM_HOME="/usr/local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-
-# Créer le répertoire global pnpm
-RUN mkdir -p $PNPM_HOME && chmod 755 $PNPM_HOME
+# Installer pnpm et un serveur HTTP simple
+RUN npm install -g pnpm@9.4.0 serve
 
 WORKDIR /app
 
@@ -66,24 +58,16 @@ WORKDIR /app
 COPY --from=builder --chown=nextjs:nodejs /app/build ./build
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/functions ./functions
-COPY --from=builder --chown=nextjs:nodejs /app/wrangler.toml ./wrangler.toml
-COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 
 # Copier le fichier .env s'il existe, sinon créer un fichier vide
 COPY --from=builder /app/.env* ./
 RUN [ ! -f .env ] && touch .env || true
 
-# Installer seulement les dépendances de production
-RUN pnpm install --prod --frozen-lockfile
-
-# Installer wrangler globalement avec la configuration pnpm appropriée
-RUN pnpm config set global-bin-dir $PNPM_HOME && \
-    pnpm install -g wrangler
+# Installer seulement les dépendances de production (sans wrangler pour éviter workerd)
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # Créer les répertoires nécessaires et configurer les permissions
-RUN mkdir -p /home/nextjs/.config /home/nextjs/.wrangler && \
-    chmod +x ./bindings.sh && \
+RUN mkdir -p /home/nextjs/.config && \
     chown -R nextjs:nodejs /app /home/nextjs
 
 # Changer vers l'utilisateur non-root
@@ -100,5 +84,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec mode de compatibilité
-CMD ["sh", "-c", "bindings=$(./bindings.sh) && wrangler pages dev ./build/client $bindings --compatibility-date=2023-05-18 --local"]
+# Commande de démarrage avec serveur simple
+CMD ["serve", "-s", "./build/client", "-l", "8787"]
