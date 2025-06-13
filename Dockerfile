@@ -34,7 +34,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build de l'application avec les variables d'environnement nécessaires
+# Build de l'application avec les variables d\'environnement nécessaires
 ENV NODE_ENV=production
 RUN pnpm run build
 
