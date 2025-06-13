@@ -102,13 +102,14 @@ Le Dockerfile utilise une approche multi-stage pour optimiser la taille et réso
 1. **Stage `base`** : Configuration de base avec Node.js Alpine et dépendances système
 2. **Stage `deps`** : Installation des dépendances
 3. **Stage `builder`** : Construction avec Node.js standard (pour éviter les problèmes de binaires natifs)
-4. **Stage `runner`** : Image de production Alpine optimisée
+4. **Stage `runner`** : Image de production Alpine optimisée avec configuration pnpm
 
-### Résolution des problèmes de build
+### Résolution des problèmes
 
-- **Problème workerd** : Utilisation de Node.js standard pour le build au lieu d'Alpine
+- **Problème workerd** : Utilisation de Node.js standard pour le build
 - **Binaires natifs** : Installation des dépendances système nécessaires
-- **Compatibilité** : Ajout de `libc6-compat` pour la compatibilité des binaires
+- **pnpm global** : Configuration correcte du répertoire global pnpm
+- **Permissions** : Gestion appropriée des utilisateurs et permissions
 
 ## 🔍 Health Checks
 
@@ -190,6 +191,8 @@ spec:
               key: anthropic-api-key
         - name: NODE_ENV
           value: "production"
+        - name: PNPM_HOME
+          value: "/home/nextjs/.local/share/pnpm"
         livenessProbe:
           httpGet:
             path: /
@@ -220,35 +223,36 @@ spec:
 
 ### Problèmes courants
 
-1. **Erreur workerd/binaires natifs**
+1. **Erreur pnpm global**
    ```bash
-   # Le nouveau Dockerfile résout ce problème en utilisant Node.js standard pour le build
+   # Le nouveau Dockerfile configure automatiquement pnpm
+   # Si problème persiste, vérifiez les variables d'environnement
+   docker exec bolt-container env | grep PNPM
+   ```
+
+2. **Erreur workerd/binaires natifs**
+   ```bash
+   # Le Dockerfile utilise Node.js standard pour le build
    docker-compose build --no-cache
    ```
 
-2. **Port déjà utilisé**
+3. **Port déjà utilisé**
    ```bash
    # Changer le port dans docker-compose.yml
    ports:
      - "8788:8787"  # Utiliser 8788 au lieu de 8787
    ```
 
-3. **Problème de permissions**
+4. **Problème de permissions**
    ```bash
-   # Vérifier les permissions du script
-   chmod +x bindings.sh
+   # Vérifier les permissions
+   docker exec bolt-container ls -la /app/
    ```
 
-4. **Variables d'environnement manquantes**
+5. **Variables d'environnement manquantes**
    ```bash
-   # Vérifier que .env.local existe et contient ANTHROPIC_API_KEY
+   # Vérifier que .env.local existe
    cat .env.local
-   ```
-
-5. **Problèmes de mémoire**
-   ```bash
-   # Augmenter la mémoire Docker si nécessaire
-   docker run --memory=4g bolt-app
    ```
 
 ### Logs de débogage
@@ -257,11 +261,11 @@ spec:
 # Logs détaillés avec timestamps
 docker-compose logs -t -f bolt-app
 
-# Logs du build
+# Logs du build avec détails
 docker-compose build --progress=plain
 
-# Logs système du conteneur
-docker exec bolt-container dmesg
+# Vérifier la configuration pnpm
+docker exec bolt-container pnpm config list
 ```
 
 ### Tests de connectivité
@@ -313,7 +317,7 @@ docker-compose pull
 docker-compose build --no-cache
 docker-compose up -d
 
-# Mise à jour rapide (sans rebuild complet)
+# Mise à jour rapide
 docker-compose build
 docker-compose up -d
 ```
@@ -337,7 +341,7 @@ docker build --cache-from bolt-app .
 # Scanner l'image pour les vulnérabilités
 docker scout cves bolt-app
 
-# Utiliser un utilisateur non-root (déjà configuré)
+# Vérifier l'utilisateur non-root
 docker exec bolt-container whoami  # Devrait retourner 'nextjs'
 ```
 
@@ -350,8 +354,8 @@ Si vous rencontrez des problèmes :
 1. Vérifiez les logs : `docker-compose logs -f`
 2. Vérifiez les variables d'environnement : `cat .env.local`
 3. Testez la connectivité : `curl http://localhost:8787/`
-4. Consultez la documentation principale dans `README.md`
-5. Vérifiez les issues GitHub pour des problèmes similaires
+4. Vérifiez la configuration pnpm : `docker exec bolt-container pnpm config list`
+5. Consultez la documentation principale dans `README.md`
 
 ### Commandes de diagnostic
 
@@ -370,5 +374,11 @@ echo "=== Health Check ==="
 docker inspect --format='{{.State.Health.Status}}' bolt-container
 
 echo "=== Environment ==="
-docker exec bolt-container env | grep -E "(NODE_ENV|PORT|ANTHROPIC)"
+docker exec bolt-container env | grep -E "(NODE_ENV|PORT|ANTHROPIC|PNPM)"
+
+echo "=== pnpm Configuration ==="
+docker exec bolt-container pnpm config list
+
+echo "=== Wrangler Version ==="
+docker exec bolt-container wrangler --version
 ```

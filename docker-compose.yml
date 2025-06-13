@@ -8,6 +8,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8787
+    env_file:
+      - .env.local
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/"]
@@ -21,23 +23,25 @@ services:
     networks:
       - bolt-network
 
+  # Service de développement avec hot-reload
+  bolt-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env.local
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: pnpm run dev --host 0.0.0.0
+    networks:
+      - bolt-network
+
 networks:
   bolt-network:
     driver: bridge
-# Configuration optionnelle pour le développement
-# Décommentez si vous voulez un setup de développement avec hot-reload
-# services:
-#   bolt-dev:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.dev
-#     ports:
-#       - "5173:5173"
-#     environment:
-#       - NODE_ENV=development
-#     env_file:
-#       - .env.local
-#     volumes:
-#       - .:/app
-#       - /app/node_modules
-#     command: pnpm run dev
