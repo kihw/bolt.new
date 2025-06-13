@@ -19,7 +19,7 @@ services:
       # Optionnel: pour persister les logs
       - ./logs:/app/logs
     networks:
-      - bolt-network
-
-  bolt-network:
-    driver: bridge
+      - caddy_net
+networks:
+  caddy_net:
+    external: true
