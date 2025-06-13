@@ -61,17 +61,17 @@ COPY --from=builder --chown=nextjs:nodejs /app/functions ./functions
 COPY --from=builder --chown=nextjs:nodejs /app/wrangler.toml ./wrangler.toml
 COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 
-# Créer un fichier .env.local vide si il n'existe pas
-RUN touch .env.local
+# Copier le fichier .env s'il existe, sinon créer un fichier vide
+COPY --from=builder /app/.env* ./
+RUN [ ! -f .env ] && touch .env || true
 
 # Installer seulement les dépendances de production
 RUN pnpm install --prod --frozen-lockfile
 
-# Rendre le script bindings.sh exécutable et s'assurer que nextjs possède tout le répertoire
-RUN chmod +x ./bindings.sh && \
-    chown -R nextjs:nodejs /app && \
-    mkdir -p /home/nextjs/.config && \
-    chown -R nextjs:nodejs /home/nextjs
+# Créer les répertoires nécessaires et configurer les permissions
+RUN mkdir -p /home/nextjs/.config /home/nextjs/.wrangler && \
+    chmod +x ./bindings.sh && \
+    chown -R nextjs:nodejs /app /home/nextjs
 
 # Changer vers l'utilisateur non-root
 USER nextjs
