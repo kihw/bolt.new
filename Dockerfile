@@ -124,25 +124,25 @@ RUN if [ ! -f ./build/client/index.html ]; then \
                 loaded = true;
                 break;
             } catch (e) {
-                console.log(`Impossible de charger ${script}:`, e.message);
+                console.log(\`Impossible de charger \${script}:\`, e.message);
             }
         }
         
         if (!loaded) {
-            document.getElementById('root').innerHTML = `
+            document.getElementById('root').innerHTML = \`
                 <div style="padding: 2rem; text-align: center;">
                     <h1>Bolt.new Assets</h1>
                     <p>Application buildée avec succès. Les modules sont prêts.</p>
                     <p>Vérifiez les logs du conteneur pour plus d'informations.</p>
                     <a href="/assets/" style="color: #667eea;">Voir les assets →</a>
                 </div>
-            `;
+            \`;
         }
     </script>
 </body>
 </html>
 EOF
-fi
+; fi
 
 # Créer un serveur qui sert intelligemment les assets
 RUN cat > server.cjs << 'EOF'
