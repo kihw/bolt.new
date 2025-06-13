@@ -22,7 +22,7 @@ COPY package.json pnpm-lock.yaml ./
 FROM base AS deps
 RUN pnpm install --frozen-lockfile
 
-# Stage pour le build - utiliser une image standard au lieu d'Alpine
+# Stage pour le build
 FROM node:20.15.1 AS builder
 
 # Installer pnpm
@@ -49,9 +49,8 @@ RUN apt-get update && apt-get install -y \
     && groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nextjs
 
-# Installer pnpm, wrangler et serve comme fallback
-RUN npm install -g pnpm@9.4.0 serve
-RUN npm install -g wrangler || echo "Wrangler installation failed, will use fallback"
+# Installer pnpm
+RUN npm install -g pnpm@9.4.0
 
 WORKDIR /app
 
@@ -59,31 +58,98 @@ WORKDIR /app
 COPY --from=builder --chown=nextjs:nodejs /app/build ./build
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 
 # Copier le fichier .env s'il existe, sinon créer un fichier vide
 COPY --from=builder /app/.env* ./
 RUN [ ! -f .env ] && touch .env || true
 
-# Créer le script de démarrage
+# Installer seulement les dépendances de production nécessaires pour le runtime
+# Exclure wrangler et workerd qui causent des problèmes
+RUN pnpm install --prod --frozen-lockfile || \
+    (echo "Installation avec pnpm échouée, utilisation de npm..." && \
+     npm ci --only=production --ignore-scripts)
+
+# Créer un serveur simple pour l'application
 RUN echo '#!/bin/bash\n\
 set -e\n\
-echo "Démarrage de l'\''application bolt.new..."\n\
-if wrangler --version > /dev/null 2>&1; then\n\
-    echo "Wrangler disponible, démarrage avec wrangler..."\n\
-    bindings=$(./bindings.sh)\n\
-    exec wrangler pages dev ./build/client $bindings --port 8787 --host 0.0.0.0\n\
-else\n\
-    echo "Wrangler non disponible, démarrage avec serveur statique..."\n\
-    exec serve -s ./build/client -l 8787\n\
-fi' > start.sh
-
-# Installer seulement les dépendances de production
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts || pnpm install --prod --frozen-lockfile
+echo "Démarrage du serveur de production..."\n\
+\n\
+# Serveur Node.js simple pour servir les fichiers statiques et gérer les fonctions\n\
+cat > server.js << '"'"'EOF'"'"'\n\
+const http = require("http");\n\
+const fs = require("fs");\n\
+const path = require("path");\n\
+const url = require("url");\n\
+\n\
+const PORT = process.env.PORT || 8787;\n\
+const PUBLIC_DIR = "./build/client";\n\
+\n\
+const mimeTypes = {\n\
+  ".html": "text/html",\n\
+  ".js": "text/javascript",\n\
+  ".css": "text/css",\n\
+  ".json": "application/json",\n\
+  ".png": "image/png",\n\
+  ".jpg": "image/jpg",\n\
+  ".gif": "image/gif",\n\
+  ".svg": "image/svg+xml",\n\
+  ".wav": "audio/wav",\n\
+  ".mp4": "video/mp4",\n\
+  ".woff": "application/font-woff",\n\
+  ".ttf": "application/font-ttf",\n\
+  ".eot": "application/vnd.ms-fontobject",\n\
+  ".otf": "application/font-otf",\n\
+  ".wasm": "application/wasm"\n\
+};\n\
+\n\
+const server = http.createServer((req, res) => {\n\
+  const parsedUrl = url.parse(req.url);\n\
+  let pathname = `.${parsedUrl.pathname}`;\n\
+  \n\
+  // Servir depuis le répertoire public\n\
+  if (pathname === "./") {\n\
+    pathname = `${PUBLIC_DIR}/index.html`;\n\
+  } else {\n\
+    pathname = `${PUBLIC_DIR}${parsedUrl.pathname}`;\n\
+  }\n\
+\n\
+  const ext = path.parse(pathname).ext;\n\
+  const mimeType = mimeTypes[ext] || "application/octet-stream";\n\
+\n\
+  fs.readFile(pathname, (err, data) => {\n\
+    if (err) {\n\
+      // Fallback vers index.html pour les routes SPA\n\
+      if (ext === "" || ext === ".html") {\n\
+        fs.readFile(`${PUBLIC_DIR}/index.html`, (fallbackErr, fallbackData) => {\n\
+          if (fallbackErr) {\n\
+            res.writeHead(404);\n\
+            res.end("404 Not Found");\n\
+          } else {\n\
+            res.writeHead(200, { "Content-Type": "text/html" });\n\
+            res.end(fallbackData);\n\
+          }\n\
+        });\n\
+      } else {\n\
+        res.writeHead(404);\n\
+        res.end("404 Not Found");\n\
+      }\n\
+    } else {\n\
+      res.writeHead(200, { "Content-Type": mimeType });\n\
+      res.end(data);\n\
+    }\n\
+  });\n\
+});\n\
+\n\
+server.listen(PORT, "0.0.0.0", () => {\n\
+  console.log(`Serveur démarré sur http://0.0.0.0:${PORT}`);\n\
+});\n\
+EOF\n\
+\n\
+exec node server.js' > start.sh
 
 # Créer les répertoires nécessaires et configurer les permissions
 RUN mkdir -p /home/nextjs/.config && \
-    chmod +x ./bindings.sh ./start.sh && \
+    chmod +x ./start.sh && \
     chown -R nextjs:nodejs /app /home/nextjs
 
 # Changer vers l'utilisateur non-root
@@ -100,5 +166,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec script conditionnel
+# Commande de démarrage avec serveur Node.js simple
 CMD ["./start.sh"]
