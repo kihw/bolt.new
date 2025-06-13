@@ -45,11 +45,19 @@ FROM node:20.15.1-alpine AS runner
 RUN apk add --no-cache \
     libc6-compat \
     curl \
+    bash \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-# Installer pnpm et wrangler
-RUN npm install -g pnpm@9.4.0 wrangler
+# Installer pnpm et configurer les variables d'environnement
+RUN npm install -g pnpm@9.4.0
+
+# Configurer PNPM_HOME et PATH pour l'installation globale
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Créer le répertoire global pnpm
+RUN mkdir -p $PNPM_HOME && chmod 755 $PNPM_HOME
 
 WORKDIR /app
 
@@ -67,6 +75,10 @@ RUN [ ! -f .env ] && touch .env || true
 
 # Installer seulement les dépendances de production
 RUN pnpm install --prod --frozen-lockfile
+
+# Installer wrangler globalement avec la configuration pnpm appropriée
+RUN pnpm config set global-bin-dir $PNPM_HOME && \
+    pnpm install -g wrangler
 
 # Créer les répertoires nécessaires et configurer les permissions
 RUN mkdir -p /home/nextjs/.config /home/nextjs/.wrangler && \
