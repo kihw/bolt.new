@@ -49,8 +49,15 @@ RUN apk add --no-cache \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-# Installer pnpm
+# Installer pnpm et configurer les variables d'environnement
 RUN npm install -g pnpm@9.4.0
+
+# Configurer PNPM_HOME et PATH pour l'installation globale
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Créer le répertoire global pnpm
+RUN mkdir -p $PNPM_HOME && chmod 755 $PNPM_HOME
 
 WORKDIR /app
 
@@ -65,12 +72,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 # Installer seulement les dépendances de production
 RUN pnpm install --prod --frozen-lockfile
 
-# Changer vers l'utilisateur non-root et définir le shell
-USER nextjs
-ENV SHELL=/bin/bash
-
-# Installer wrangler globalement sans pnpm setup
-RUN pnpm install -g wrangler
+# Installer wrangler globalement avec la configuration pnpm appropriée
+RUN pnpm config set global-bin-dir $PNPM_HOME && \
+    pnpm install -g wrangler
 
 # Rendre le script bindings.sh exécutable
 USER root
