@@ -1,0 +1,26 @@
+# Dockerfile pour le développement avec hot-reload
+FROM node:20.15.1-alpine
+
+# Installer pnpm
+RUN npm install -g pnpm@9.4.0
+
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY package.json pnpm-lock.yaml ./
+
+# Installer toutes les dépendances (dev incluses)
+RUN pnpm install --frozen-lockfile
+
+# Copier le reste des fichiers
+COPY . .
+
+# Exposer le port de développement
+EXPOSE 5173
+
+# Variables d'environnement pour le développement
+ENV NODE_ENV=development
+
+# Commande de démarrage pour le développement
+CMD ["pnpm", "run", "dev", "--host", "0.0.0.0"]
