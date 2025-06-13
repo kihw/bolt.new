@@ -270,5 +270,5 @@ ENV PORT=8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8787/ || exit 1
 
-# Commande de démarrage avec serveur CommonJS
-CMD ["node", "server.cjs"]
+# Commande de démarrage avec le serveur SSR de bolt.new
+CMD ["node", "./build/index.js"]
