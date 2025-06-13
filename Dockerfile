@@ -34,7 +34,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build de l'application avec les variables d'environnement nécessaires
+# Build de l'application avec les variables d\'environnement nécessaires
 ENV NODE_ENV=production
 RUN pnpm run build
 
@@ -70,7 +70,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/bindings.sh ./bindings.sh
 # Installer seulement les dépendances de production
 RUN pnpm install --prod --frozen-lockfile
 
-# Changer vers l'utilisateur non-root avant d'installer wrangler
+# Changer vers l'utilisateur non-root avant d\'installer wrangler
 USER nextjs
 
 # Configurer pnpm pour l'utilisateur et installer wrangler
